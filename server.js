@@ -9,10 +9,14 @@ import cartItemRoutes from './routes/cartItems.js';
 import orderRoutes from './routes/orders.js';
 import resetRoutes from './routes/reset.js';
 import paymentSummaryRoutes from './routes/paymentSummary.js';
+import authRoutes from './routes/auth.js';
+import favouriteRoutes from './routes/favourites.js';
 import { Product } from './models/Product.js';
 import { DeliveryOption } from './models/DeliveryOption.js';
 import { CartItem } from './models/CartItem.js';
 import { Order } from './models/Order.js';
+import './models/User.js';
+import './models/FavouriteItem.js';
 import { defaultProducts } from './defaultData/defaultProducts.js';
 import { defaultDeliveryOptions } from './defaultData/defaultDeliveryOptions.js';
 import { defaultCart } from './defaultData/defaultCart.js';
@@ -38,6 +42,8 @@ app.use('/api/cart-items', cartItemRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/reset', resetRoutes);
 app.use('/api/payment-summary', paymentSummaryRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/favourites', favouriteRoutes);
 
 // Serve static files from the dist folder
 app.use(express.static(path.join(__dirname, 'dist')));
@@ -62,6 +68,16 @@ app.use((err, req, res, next) => {
 
 // Sync database and load default data if none exist
 await sequelize.sync();
+
+// Existing local databases predate account-specific carts and orders. Add the
+// nullable ownership columns without discarding the course's seeded data.
+const queryInterface = sequelize.getQueryInterface();
+async function addColumnIfMissing(tableName, columnName, definition) {
+  const columns = await queryInterface.describeTable(tableName);
+  if (!columns[columnName]) await queryInterface.addColumn(tableName, columnName, definition);
+}
+await addColumnIfMissing('CartItems', 'userId', { type: 'UUID', allowNull: true });
+await addColumnIfMissing('Orders', 'userId', { type: 'UUID', allowNull: true });
 
 const productCount = await Product.count();
 if (productCount === 0) {

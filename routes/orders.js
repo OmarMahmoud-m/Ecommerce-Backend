@@ -3,12 +3,14 @@ import { Order } from '../models/Order.js';
 import { Product } from '../models/Product.js';
 import { DeliveryOption } from '../models/DeliveryOption.js';
 import { CartItem } from '../models/CartItem.js';
+import { requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
+router.use(requireAuth);
 
 router.get('/', async (req, res) => {
   const expand = req.query.expand;
-  let orders = await Order.unscoped().findAll({ order: [['orderTimeMs', 'DESC']] }); // Sort by most recent
+  let orders = await Order.unscoped().findAll({ where: { userId: req.user.id }, order: [['orderTimeMs', 'DESC']] });
 
   if (expand === 'products') {
     orders = await Promise.all(orders.map(async (order) => {
@@ -30,7 +32,7 @@ router.get('/', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const cartItems = await CartItem.findAll();
+  const cartItems = await CartItem.findAll({ where: { userId: req.user.id } });
 
   if (cartItems.length === 0) {
     return res.status(400).json({ error: 'Cart is empty' });
@@ -60,12 +62,13 @@ router.post('/', async (req, res) => {
   totalCostCents = Math.round(totalCostCents * 1.1);
 
   const order = await Order.create({
+    userId: req.user.id,
     orderTimeMs: Date.now(),
     totalCostCents,
     products
   });
 
-  await CartItem.destroy({ where: {} });
+  await CartItem.destroy({ where: { userId: req.user.id } });
 
   res.status(201).json(order);
 });
@@ -74,7 +77,7 @@ router.get('/:orderId', async (req, res) => {
   const { orderId } = req.params;
   const expand = req.query.expand;
 
-  let order = await Order.findByPk(orderId);
+  let order = await Order.findOne({ where: { id: orderId, userId: req.user.id } });
   if (!order) {
     return res.status(404).json({ error: 'Order not found' });
   }
