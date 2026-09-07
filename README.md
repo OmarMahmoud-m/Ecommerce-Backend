@@ -21,8 +21,7 @@ Set `JWT_SECRET` before using these endpoints. Authentication responses include 
 - `POST /api/auth/register` — body: `{ "name", "email", "password" }` (passwords must be at least 8 characters)
 - `POST /api/auth/login` — body: `{ "email", "password" }`
 - `GET /api/auth/me`
-- `GET|POST /api/favourites` — POST body: `{ "productId" }`
-- `DELETE /api/favourites/:productId`
+
 
 The existing cart, payment summary, and order endpoints now require the same token and only return the signed-in user's records. Creating an order clears only that user's cart.
 
