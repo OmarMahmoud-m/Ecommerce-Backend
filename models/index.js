@@ -3,6 +3,9 @@ import sqlJsAsSqlite3 from 'sql.js-as-sqlite3';
 import fs from 'fs';
 import path from 'path';
 
+// Prefer a full connection string (e.g. Supabase's DATABASE_URL) when present.
+const isUsingConnectionString = !!process.env.DATABASE_URL;
+
 const isUsingRDS = process.env.RDS_HOSTNAME && process.env.RDS_USERNAME && process.env.RDS_PASSWORD;
 const dbType = process.env.DB_TYPE || 'mysql';
 const defaultPorts = {
@@ -18,7 +21,21 @@ const dbFilePath = process.env.NODE_ENV === 'production'
 
 export let sequelize;
 
-if (isUsingRDS) {
+if (isUsingConnectionString) {
+  // Supabase (or any Postgres provider) connection string.
+  // Use the pooled "transaction mode" URL (port 6543) here in production.
+  sequelize = new Sequelize(process.env.DATABASE_URL, {
+    dialect: 'postgres',
+    protocol: 'postgres',
+    logging: false,
+    dialectOptions: {
+      ssl: {
+        require: true,
+        rejectUnauthorized: false,
+      },
+    },
+  });
+} else if (isUsingRDS) {
   sequelize = new Sequelize({
     database: process.env.RDS_DB_NAME,
     username: process.env.RDS_USERNAME,
@@ -26,10 +43,18 @@ if (isUsingRDS) {
     host: process.env.RDS_HOSTNAME,
     port: process.env.RDS_PORT || defaultPort,
     dialect: dbType,
-    logging: false
+    logging: false,
+    dialectOptions: dbType === 'postgres' ? {
+      ssl: {
+        require: true,
+        rejectUnauthorized: false,
+      },
+    } : undefined,
   });
 } else {
-  // If in production on Vercel and the DB doesn't exist in /tmp yet, copy it over from the project root
+  // Local-only fallback: file-based SQLite via sql.js.
+  // NOTE: this does NOT persist reliably on Vercel — for production, set
+  // DATABASE_URL (or the RDS_* vars) to point at a real Postgres database.
   if (process.env.NODE_ENV === 'production' && !fs.existsSync(dbFilePath)) {
     const originalDb = path.join(process.cwd(), 'database.sqlite');
     if (fs.existsSync(originalDb)) {
@@ -41,7 +66,7 @@ if (isUsingRDS) {
     dialect: 'sqlite',
     dialectModule: sqlJsAsSqlite3,
     storage: dbFilePath,
-    logging: false
+    logging: false,
   });
 
   // Save database to file after write operations.
@@ -56,6 +81,8 @@ if (isUsingRDS) {
 }
 
 export async function saveDatabaseToFile() {
+  // Only relevant for the sql.js/local-file fallback branch above.
+  if (isUsingConnectionString || isUsingRDS) return;
   try {
     const dbInstance = await sequelize.connectionManager.getConnection();
     const binaryArray = dbInstance.database.export();
