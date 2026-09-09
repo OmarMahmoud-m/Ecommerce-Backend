@@ -1,5 +1,6 @@
 import { Sequelize } from 'sequelize';
 import sqlJsAsSqlite3 from 'sql.js-as-sqlite3';
+import pg from 'pg';
 import fs from 'fs';
 import path from 'path';
 
@@ -26,6 +27,7 @@ if (isUsingConnectionString) {
   // Use the pooled "transaction mode" URL (port 6543) here in production.
   sequelize = new Sequelize(process.env.DATABASE_URL, {
     dialect: 'postgres',
+    dialectModule: pg,
     protocol: 'postgres',
     logging: false,
     dialectOptions: {
@@ -43,6 +45,7 @@ if (isUsingConnectionString) {
     host: process.env.RDS_HOSTNAME,
     port: process.env.RDS_PORT || defaultPort,
     dialect: dbType,
+    dialectModule: dbType === 'postgres' ? pg : undefined,
     logging: false,
     dialectOptions: dbType === 'postgres' ? {
       ssl: {
